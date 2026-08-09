@@ -23,7 +23,8 @@ func main() {
 	log := logger.Sugar()
 	// If you don't set storage and pass it into buildah.Pull
 	// It'll fail with a segfault
-	store, err := storage.GetStore(types.StoreOptions{RunRoot: "/run/user/1000", GraphRoot: "/var/lib/containers/storage"})
+	// Also, buildah (cli) uses ~/.local/share/containers/storage as the default storage location, so we need to set it to that so we can see images we pull via code in the cli
+	store, err := storage.GetStore(types.StoreOptions{RunRoot: "/run/user/1000", GraphRoot: os.Getenv("HOME") + "/.local/share/containers/storage"})
 	if err != nil {
 		log.Error(err)
 		return
