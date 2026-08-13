@@ -32,23 +32,27 @@ func main() {
 	}
 	// policy.json is related to https://github.com/containers/image/blob/main/docs/containers-policy.json.5.md
 	// move it to somewhere on the fs and read from it there specifically
-	// id, err := buildah.Pull(context.TODO(), "docker://docker.io/redis:latest", buildah.PullOptions{ReportWriter: os.Stdout, Store: store, SignaturePolicyPath: "/etc/containers/policy.json"})
+	id, err := buildah.Pull(context.TODO(), "docker://docker.io/redis:latest", buildah.PullOptions{ReportWriter: os.Stdout, Store: store, SignaturePolicyPath: "/etc/containers/policy.json"})
 
-	// if err != nil {
-	// 	log.Error(err)
-	// }
+	if err != nil {
+		log.Error(err)
+	}
 
-	// log.Info(id)
+	log.Infof("Pulled image with image ID: %s", id)
+	// TODO: figure out why os.Getenv("HOME") + "/code/buildah-go/bundle" doesn't work, but hardcoding it does
+	log.Info("Attempting to push image to oci layout at /home/ajssalemo/code/buildah-go/bundle")
 
-	dir := "oci:" + os.Getenv("HOME") + "/code/buildah-go/bundle"
+	dir := "oci:/home/ajssalemo/code/buildah-go/bundle"
 	dest, err := alltransports.ParseImageName(dir)
 	if err != nil {
 		log.Error(err)
 		return
 	}
 
-	_, _, err = buildah.Push(context.TODO(), "nginx:latest", dest, buildah.PushOptions{ReportWriter: os.Stdout, Store: store, SignaturePolicyPath: "/etc/containers/policy.json"})
+	_, _, err = buildah.Push(context.TODO(), "nginx:latest", dest, buildah.PushOptions{ReportWriter: os.Stdout, Store: store, BlobDirectory: os.Getenv("HOME") + "/code/buildah-go/blob", SignaturePolicyPath: "/etc/containers/policy.json"})
 	if err != nil {
 		log.Error(err)
 	}
+
+	log.Info("Successfully pushed image to oci layout at /home/ajssalemo/code/buildah-go/bundle")
 }
