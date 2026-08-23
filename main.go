@@ -22,10 +22,20 @@ func main() {
 	logger, _ := zap.NewProduction()
 	defer logger.Sync()
 	log := logger.Sugar()
+	// Get the users home directory
+	// Since this is going to be ran as root typically (e.x `sudo $(which go) run . or `sudo ./somebinary`)
+	// then it'll be under /root
+	// Otherwise, its /home/<user>/
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		log.Error(err)
+		return
+	}
+
 	// If you don't set storage and pass it into buildah.Pull
 	// It'll fail with a segfault
 	// Also, buildah (cli) uses ~/.local/share/containers/storage as the default storage location, so we need to set it to that so we can see images we pull via code in the cli
-	store, err := storage.GetStore(storage_types.StoreOptions{RunRoot: "/run/user/1000", GraphRoot: os.Getenv("HOME") + "/.local/share/containers/storage"})
+	store, err := storage.GetStore(storage_types.StoreOptions{RunRoot: "/run/user/1000", GraphRoot: homeDir + "/.local/share/containers/storage"})
 	if err != nil {
 		log.Error(err)
 		return
@@ -39,17 +49,24 @@ func main() {
 	}
 
 	log.Infof("Pulled image with image ID: %s", id)
-	// TODO: figure out why os.Getenv("HOME") + "/code/buildah-go/bundle" doesn't work, but hardcoding it does
-	log.Info("Attempting to push image to oci layout at /home/ajssalemo/code/buildah-go/bundle")
-
-	dir := "oci:/home/ajssalemo/code/buildah-go/bundle"
+	log.Info("Attempting to push image to oci layout at " + homeDir + "/code/buildah-go/redis")
+	// The logic of `dir` and how this maps to being able to have runc find/create containers from it is is the following:
+	// e.g `oci:/path/to/your/dir:image:tag`
+	// 1. this must be prefixed with `oci:` - this will create files/folders in the directory specific in a OCI layout
+	// 2. the path specified, for semantic reasons, should match the image name (but it doesnt have to): https://github.com/opencontainers/umoci/blob/main/doc/man/umoci-unpack.1.md
+	// ex. /home/images/redis
+	// 3. if tag is omitted, umoci looks up last. you can push multiple tags to the same directory
+	// ex. when umoci looks it up, it would be like this: `umoci unpack --image /home/images/redis:1.2.3 /path/to/unpack/dir`
+	// --------------------------------------------------- //
+	// TODO: remove image hardcoding name
+	dir := "oci:" + homeDir + "/code/buildah-go/redis:latest"
 	dest, err := alltransports.ParseImageName(dir)
 	if err != nil {
 		log.Error(err)
 		return
 	}
-
-	_, _, err = buildah.Push(context.TODO(), "nginx:latest", dest, buildah.PushOptions{ReportWriter: os.Stdout, Store: store, BlobDirectory: os.Getenv("HOME") + "/code/buildah-go/blob", SignaturePolicyPath: "/etc/containers/policy.json"})
+	// Push the image id from the pull, earlier above
+	_, _, err = buildah.Push(context.TODO(), id, dest, buildah.PushOptions{ReportWriter: os.Stdout, Store: store, SignaturePolicyPath: "/etc/containers/policy.json"})
 	if err != nil {
 		log.Error(err)
 	}
