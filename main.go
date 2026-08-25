@@ -6,10 +6,10 @@ import (
 
 	buildah "go.podman.io/buildah"
 	"go.podman.io/image/v5/transports/alltransports"
-	storage "go.podman.io/storage"
 	"go.podman.io/storage/pkg/reexec"
-	storage_types "go.podman.io/storage/types"
 	zap "go.uber.org/zap"
+
+	pkg "buildah-go/pkg"
 )
 
 func main() {
@@ -35,14 +35,14 @@ func main() {
 	// If you don't set storage and pass it into buildah.Pull
 	// It'll fail with a segfault
 	// Also, buildah (cli) uses ~/.local/share/containers/storage as the default storage location, so we need to set it to that so we can see images we pull via code in the cli
-	store, err := storage.GetStore(storage_types.StoreOptions{RunRoot: "/run/user/1000", GraphRoot: homeDir + "/.local/share/containers/storage"})
+	store, err := pkg.GetBuildahStorage(homeDir)
 	if err != nil {
 		log.Error(err)
 		return
 	}
 	// policy.json is related to https://github.com/containers/image/blob/main/docs/containers-policy.json.5.md
 	// move it to somewhere on the fs and read from it there specifically
-	id, err := buildah.Pull(context.TODO(), "docker://docker.io/redis:latest", buildah.PullOptions{ReportWriter: os.Stdout, Store: store, SignaturePolicyPath: "/etc/containers/policy.json"})
+	id, err := pkg.PullBuildahImage(store, "redis:latest")
 
 	if err != nil {
 		log.Error(err)
@@ -66,10 +66,10 @@ func main() {
 		return
 	}
 	// Push the image id from the pull, earlier above
-	_, _, err = buildah.Push(context.TODO(), id, dest, buildah.PushOptions{ReportWriter: os.Stdout, Store: store, SignaturePolicyPath: "/etc/containers/policy.json"})
+	err = pkg.PushBuildahImage(store, id, dest)
 	if err != nil {
 		log.Error(err)
 	}
 
-	log.Info("Successfully pushed image to oci layout at /home/ajssalemo/code/buildah-go/bundle")
+	log.Info("Successfully pushed image to oci layout at " + homeDir + "/code/buildah-go/redis")
 }
