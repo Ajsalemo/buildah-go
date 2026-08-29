@@ -1,10 +1,12 @@
 package main
 
 import (
-	"context"
 	"os"
 
-	buildah "go.podman.io/buildah"
+	umoci "github.com/opencontainers/umoci"
+	"github.com/opencontainers/umoci/oci/cas/dir"
+	"github.com/opencontainers/umoci/oci/casext"
+	"github.com/opencontainers/umoci/oci/layer"
 	"go.podman.io/image/v5/transports/alltransports"
 	"go.podman.io/storage/pkg/reexec"
 	zap "go.uber.org/zap"
@@ -59,8 +61,8 @@ func main() {
 	// ex. when umoci looks it up, it would be like this: `umoci unpack --image /home/images/redis:1.2.3 /path/to/unpack/dir`
 	// --------------------------------------------------- //
 	// TODO: remove image hardcoding name
-	dir := "oci:" + homeDir + "/code/buildah-go/redis:latest"
-	dest, err := alltransports.ParseImageName(dir)
+	directory := "oci:" + "/home/ajssalemo/code/buildah-go/redis:latest"
+	dest, err := alltransports.ParseImageName(directory)
 	if err != nil {
 		log.Error(err)
 		return
@@ -72,4 +74,19 @@ func main() {
 	}
 
 	log.Info("Successfully pushed image to oci layout at " + homeDir + "/code/buildah-go/redis")
+	// Switch to using umoci to create an OCI layout for runc to use
+	log.Info("Attempting to unpack image to oci layout at " + homeDir + "/code/buildah-go/redis")
+	e, err := dir.Open("/home/ajssalemo/code/buildah-go/redis")
+	if err != nil {
+		log.Error(err)
+		return
+	}
+
+	engineExt := casext.NewEngine(e)
+	//  TODO: Move this to homeDir (/root)
+	err = umoci.Unpack(engineExt, "latest", "/home/ajssalemo/code/buildah-go/bundle/redis", layer.UnpackOptions{})
+	if err != nil {
+		log.Error(err)
+		return
+	}
 }
