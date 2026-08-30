@@ -2,11 +2,8 @@ package main
 
 import (
 	"os"
+	"strings"
 
-	umoci "github.com/opencontainers/umoci"
-	"github.com/opencontainers/umoci/oci/cas/dir"
-	"github.com/opencontainers/umoci/oci/casext"
-	"github.com/opencontainers/umoci/oci/layer"
 	"go.podman.io/image/v5/transports/alltransports"
 	"go.podman.io/storage/pkg/reexec"
 	zap "go.uber.org/zap"
@@ -44,14 +41,13 @@ func main() {
 	}
 	// policy.json is related to https://github.com/containers/image/blob/main/docs/containers-policy.json.5.md
 	// move it to somewhere on the fs and read from it there specifically
-	id, err := pkg.PullBuildahImage(store, "redis:latest")
-
+	id, err := pkg.PullBuildahImage(store, "redis:latest", log)
 	if err != nil {
 		log.Error(err)
+		return
 	}
 
-	log.Infof("Pulled image with image ID: %s", id)
-	log.Info("Attempting to push image to oci layout at " + homeDir + "/code/buildah-go/redis")
+	log.Infof("[buildah] Pulled image with image ID: %s", id)
 	// The logic of `dir` and how this maps to being able to have runc find/create containers from it is is the following:
 	// e.g `oci:/path/to/your/dir:image:tag`
 	// 1. this must be prefixed with `oci:` - this will create files/folders in the directory specific in a OCI layout
@@ -61,32 +57,37 @@ func main() {
 	// ex. when umoci looks it up, it would be like this: `umoci unpack --image /home/images/redis:1.2.3 /path/to/unpack/dir`
 	// --------------------------------------------------- //
 	// TODO: remove image hardcoding name
-	directory := "oci:" + "/home/ajssalemo/code/buildah-go/redis:latest"
+	directory := "oci:" + homeDir + "/code/buildah-go/redis:latest"
 	dest, err := alltransports.ParseImageName(directory)
 	if err != nil {
 		log.Error(err)
 		return
 	}
 	// Push the image id from the pull, earlier above
-	err = pkg.PushBuildahImage(store, id, dest)
-	if err != nil {
-		log.Error(err)
+	buildahErr := pkg.PushBuildahImage(store, id, dest, log, homeDir)
+	if buildahErr != nil {
+		log.Error(buildahErr)
+		return
 	}
-
-	log.Info("Successfully pushed image to oci layout at " + homeDir + "/code/buildah-go/redis")
+	log.Info("[buildah] Successfully pushed image to oci layout at " + homeDir + "/code/buildah-go/redis")
 	// Switch to using umoci to create an OCI layout for runc to use
-	log.Info("Attempting to unpack image to oci layout at " + homeDir + "/code/buildah-go/redis")
-	e, err := dir.Open("/home/ajssalemo/code/buildah-go/redis")
-	if err != nil {
-		log.Error(err)
+	// Use umoci to unpack the image to a directory that runc can use to create a container from
+	umociErr := pkg.UmociUnpack(homeDir, log)
+	if umociErr != nil {
+		if strings.Contains(umociErr.Error(), "config.json already exists") {
+			log.Warn("[umoci] config.json already exists, skipping unpack")
+			// no-op
+		} else {
+			log.Error(umociErr)
+			return
+		}
+	}
+	log.Info("[umoci] Successfully unpacked image to oci layout at " + homeDir + "/code/buildah-go/bundle/redis")
+	// Point runc to the bundle and create + start a container from it
+	runcErr := pkg.Runc(homeDir, log)
+	if runcErr != nil {
+		log.Error(runcErr)
 		return
 	}
-
-	engineExt := casext.NewEngine(e)
-	//  TODO: Move this to homeDir (/root)
-	err = umoci.Unpack(engineExt, "latest", "/home/ajssalemo/code/buildah-go/bundle/redis", layer.UnpackOptions{})
-	if err != nil {
-		log.Error(err)
-		return
-	}
+	log.Info("[runc] Successfully started container via `runc` with bundle at " + homeDir + "/code/buildah-go/bundle/redis")
 }

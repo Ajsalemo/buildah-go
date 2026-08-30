@@ -10,6 +10,8 @@ require (
 	github.com/apex/log v1.9.0 // indirect
 	github.com/blang/semver/v4 v4.0.0 // indirect
 	github.com/containerd/cgroups/v3 v3.1.3 // indirect
+	github.com/containerd/console v1.0.5 // indirect
+	github.com/containerd/go-runc v1.2.1 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.7 // indirect
 	github.com/golang/groupcache v0.0.0-20241129210726-2c02b8208cf8 // indirect
 	github.com/mistifyio/go-zfs/v3 v3.0.1 // indirect
