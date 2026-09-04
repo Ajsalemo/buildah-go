@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"os"
 	"strings"
 
@@ -21,6 +22,26 @@ func main() {
 	logger, _ := zap.NewProduction()
 	defer logger.Sync()
 	log := logger.Sugar()
+	// Define
+	image := flag.String("image", "", "The container image name")
+	tag := flag.String("tag", "", "The container image tag")
+	registryUrl := flag.String("registry", "", "The container registry url")
+	flag.Parse()
+	// Return early if image name is omitted
+	if *image == "" {
+		log.Error("Image name is required")
+		return
+	}
+	// Return a warning if tag wasn't provided. We'll use latest otherwise
+	if *tag == "" {
+		*tag = "latest"
+		log.Warn("Image tag wasn't provided - defaulting to `latest`")
+	}
+	// Return a warning if registryUrl wasn't provided. We'll use "docker.io" otherwise
+	if *registryUrl == "" {
+		*registryUrl = "docker.io"
+		log.Warn("Registry URL wasn't provided - defaulting to `docker.io`")
+	}
 	// Get the users home directory
 	// Since this is going to be ran as root typically (e.x `sudo $(which go) run . or `sudo ./somebinary`)
 	// then it'll be under /root
@@ -41,7 +62,7 @@ func main() {
 	}
 	// policy.json is related to https://github.com/containers/image/blob/main/docs/containers-policy.json.5.md
 	// move it to somewhere on the fs and read from it there specifically
-	id, err := pkg.PullBuildahImage(store, "redis:latest", log)
+	id, err := pkg.PullBuildahImage(store, *registryUrl, *image, *tag, log)
 	if err != nil {
 		log.Error(err)
 		return
@@ -56,38 +77,37 @@ func main() {
 	// 3. if tag is omitted, umoci looks up last. you can push multiple tags to the same directory
 	// ex. when umoci looks it up, it would be like this: `umoci unpack --image /home/images/redis:1.2.3 /path/to/unpack/dir`
 	// --------------------------------------------------- //
-	// TODO: remove image hardcoding name
-	directory := "oci:" + homeDir + "/code/buildah-go/redis:latest"
+	directory := "oci:" + homeDir + "/code/buildah-go/" + *image + "/" + *tag
 	dest, err := alltransports.ParseImageName(directory)
 	if err != nil {
 		log.Error(err)
 		return
 	}
 	// Push the image id from the pull, earlier above
-	buildahErr := pkg.PushBuildahImage(store, id, dest, log, homeDir)
+	buildahErr := pkg.PushBuildahImage(store, id, dest, log, directory)
 	if buildahErr != nil {
 		log.Error(buildahErr)
 		return
 	}
-	log.Info("[buildah] Successfully pushed image to oci layout at " + homeDir + "/code/buildah-go/redis")
+	log.Info("[buildah] Successfully pushed image to oci layout at " + directory)
 	// Switch to using umoci to create an OCI layout for runc to use
 	// Use umoci to unpack the image to a directory that runc can use to create a container from
-	umociErr := pkg.UmociUnpack(homeDir, log)
+	umociErr := pkg.UmociUnpack(homeDir, log, *image, *tag)
 	if umociErr != nil {
-		if strings.Contains(umociErr.Error(), "config.json already exists") {
-			log.Warn("[umoci] config.json already exists, skipping unpack")
+		if strings.Contains(umociErr.Error(), "already exists") {
+			log.Warn("[umoci] A bundle file already exists - no-op - skipping operation")
 			// no-op
 		} else {
 			log.Error(umociErr)
 			return
 		}
 	}
-	log.Info("[umoci] Successfully unpacked image to oci layout at " + homeDir + "/code/buildah-go/bundle/redis")
+	log.Info("[umoci] Successfully unpacked image to oci layout at " + directory)
 	// Point runc to the bundle and create + start a container from it
-	runcErr := pkg.Runc(homeDir, log)
+	runcErr := pkg.Runc(homeDir, directory, log, *image, *tag)
 	if runcErr != nil {
 		log.Error(runcErr)
 		return
 	}
-	log.Info("[runc] Successfully started container via `runc` with bundle at " + homeDir + "/code/buildah-go/bundle/redis")
+	log.Info("[runc] Successfully started container via `runc` with bundle at " + directory)
 }

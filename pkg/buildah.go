@@ -20,18 +20,19 @@ func GetBuildahStorage(homeDir string) (storage.Store, error) {
 	return store, err
 }
 
-func PullBuildahImage(store storage.Store, imageName string, log *zap.SugaredLogger) (string, error) {
+func PullBuildahImage(store storage.Store, registryUrl string, imageName string, tag string, log *zap.SugaredLogger) (string, error) {
 	// policy.json is related to https://github.com/containers/image/blob/main/docs/containers-policy.json.5.md
 	// move it to somewhere on the fs and read from it there specifically
-	log.Info("[buildah] Pulling image " + imageName + " with `buildah pull`")
-	id, err := buildah.Pull(context.TODO(), "docker://"+imageName, buildah.PullOptions{ReportWriter: os.Stdout, Store: store, SignaturePolicyPath: "/etc/containers/policy.json"})
+	fullyQualifiedImageName := registryUrl + "/" + imageName + ":" + tag
+	log.Info("[buildah] Pulling image " + fullyQualifiedImageName + " with `buildah pull`")
+	id, err := buildah.Pull(context.TODO(), "docker://"+fullyQualifiedImageName, buildah.PullOptions{ReportWriter: os.Stdout, Store: store, SignaturePolicyPath: "/etc/containers/policy.json"})
 
 	return id, err
 }
 
-func PushBuildahImage(store storage.Store, imageID string, dest types.ImageReference, log *zap.SugaredLogger, homeDir string) error {
+func PushBuildahImage(store storage.Store, imageID string, dest types.ImageReference, log *zap.SugaredLogger, directory string) error {
 	// Push the image id from the pull, earlier above
-	log.Info("[buildah] Attempting to push image to oci layout at " + homeDir + "/code/buildah-go/redis")
+	log.Info("[buildah] Attempting to push image to oci layout at " + directory)
 	_, _, err := buildah.Push(context.TODO(), imageID, dest, buildah.PushOptions{ReportWriter: os.Stdout, Store: store, SignaturePolicyPath: "/etc/containers/policy.json"})
 
 	return err

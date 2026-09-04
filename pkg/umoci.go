@@ -8,17 +8,16 @@ import (
 	"go.uber.org/zap"
 )
 
-func UmociUnpack(homeDir string, log *zap.SugaredLogger) error {
-	e, err := dir.Open(homeDir + "/code/buildah-go/redis")
+func UmociUnpack(homeDir string, log *zap.SugaredLogger, image string, tag string) error {
+	e, err := dir.Open(homeDir + "/code/buildah-go/" + image)
 	if err != nil {
 		log.Error(err)
 		return err
 	}
 
 	engineExt := casext.NewEngine(e)
-	//  TODO: unpack this in the format of homeDir+"/code/buildah-go/bundle/{image}/{tag}
-	log.Info("[umoci] Attempting to unpack image to oci layout at " + homeDir + "/code/buildah-go/redis")
-	err2 := umoci.Unpack(engineExt, "latest", homeDir+"/code/buildah-go/bundle/redis", layer.UnpackOptions{})
+	log.Info("[umoci] Attempting to unpack image to oci layout at " + homeDir + "/code/buildah-go/bundle/" + image + "/" + tag)
+	err2 := umoci.Unpack(engineExt, tag, homeDir+"/code/buildah-go/bundle/"+image+"/"+tag, layer.UnpackOptions{})
 
 	return err2
 }
