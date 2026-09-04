@@ -80,7 +80,7 @@ func Runc(homeDir string, directory string, log *zap.SugaredLogger, image string
 		return err
 	}
 
-	log.Info("[runc] Starting container via `runc` with bundle at " + homeDir + "/code/buildah-go/bundle/" + image + "/" + tag)
+	log.Infof("[runc] Starting container `%s` via `runc` with bundle at %s", containerID, homeDir+"/code/buildah-go/bundle/"+image+"/"+tag)
 	opts := &runc.CreateOpts{
 		// Start this in detached (background) mode
 		Detach: true,
