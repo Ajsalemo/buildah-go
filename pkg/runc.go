@@ -79,11 +79,23 @@ func Runc(homeDir string, directory string, log *zap.SugaredLogger, image string
 	if err := RuncSetTerminal(homeDir, image, tag, log); err != nil {
 		return err
 	}
-
+	// Set up a console socket for the container. This is required for detached mode, otherwise runc will fail to start the container
+	log.Infof("[runc] Setting up console socket at %s", homeDir+"/code/buildah-go/socket/"+containerID+"/"+"/console.sock")
+	err = os.MkdirAll(homeDir+"/code/buildah-go/socket/"+containerID, 0755)
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Infof("[runc] Created console socket directory at %s", homeDir+"/code/buildah-go/socket/"+containerID)
+	socket, err := runc.NewConsoleSocket(homeDir + "/code/buildah-go/socket/" + containerID + "/" + "console.sock")
+	if err != nil {
+		return err
+	}
 	log.Infof("[runc] Starting container `%s` via `runc` with bundle at %s", containerID, homeDir+"/code/buildah-go/bundle/"+image+"/"+tag)
+
 	opts := &runc.CreateOpts{
 		// Start this in detached (background) mode
-		Detach: true,
+		Detach:        true,
+		ConsoleSocket: socket,
 	}
 
 	_, err2 := r.Run(context.Background(), containerID, homeDir+"/code/buildah-go/bundle/"+image+"/"+tag, opts)
