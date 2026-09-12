@@ -77,7 +77,14 @@ func main() {
 	// 3. if tag is omitted, umoci looks up last. you can push multiple tags to the same directory
 	// ex. when umoci looks it up, it would be like this: `umoci unpack --image /home/images/redis:1.2.3 /path/to/unpack/dir`
 	// --------------------------------------------------- //
+	// Check if the image is in a format we'd see on dockerhub - e.g somerepo/someimage
+	// This may cause weird behvior with path creation
+	if strings.Contains(*image, "/") {
+		log.Info("extra / detected in image name - converting to '_'")
+		*image = strings.ReplaceAll(*image, "/", "_")
+	}
 	directory := "oci:" + homeDir + "/code/buildah-go/" + *image + ":" + *tag
+
 	dest, err := alltransports.ParseImageName(directory)
 	if err != nil {
 		log.Error(err)
@@ -103,8 +110,6 @@ func main() {
 		}
 	}
 	log.Info("[umoci] Successfully unpacked image to oci layout at " + directory)
-	// Point runc to the bundle and create + start a container from it
-	// TOOD - fix why this is failing after commit 88a50c6
 	runcErr := pkg.Runc(homeDir, directory, log, *image, *tag)
 	if runcErr != nil {
 		log.Error(runcErr)

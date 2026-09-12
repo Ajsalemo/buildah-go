@@ -68,7 +68,10 @@ func Runc(homeDir string, directory string, log *zap.SugaredLogger, image string
 	if err != nil {
 		log.Fatalf("Failed to generate UUID: %v", err)
 	}
-	containerID := image + "-" + tag + "-" + newUUID.String()
+	// Problem found:
+	// Keep this to just a UUID
+	// If concating image + tag + UUID, this may fail with `invalid argument` due to file path length limits
+	containerID := newUUID.String()
 	// Instantiate runc
 	r := &runc.Runc{
 		Rootless: BoolPointer(false),
